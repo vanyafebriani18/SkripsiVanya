@@ -85,8 +85,6 @@ DISPLAY_NAMES = {
     "Aplikasi_Digital_Banking": "Aplikasi digital banking",
 }
 
-# Alias dibuat panjang agar dapat membaca hasil ekspor Google Forms yang memakai
-# kalimat pertanyaan penuh, serta file yang kolomnya sudah disederhanakan.
 COLUMN_ALIASES: Dict[str, List[str]] = {
     "Customer_ID": [
         "customer_id",
@@ -301,10 +299,6 @@ class CleaningReport:
     outlier_ekstrem_terdeteksi: int
     kolom_konstan: List[str]
 
-
-# =========================================================
-# FUNGSI PEMROSESAN DATA
-# =========================================================
 def normalize_text(value: object) -> str:
     text = "" if value is None else str(value)
     text = unicodedata.normalize("NFKD", text)
