@@ -1,54 +1,31 @@
-Program ini merupakan revisi dari dashboard Streamlit untuk penelitian skripsi Vanya Febriani.
+Dashboard Segmentasi Pengguna Mobile Banking — Revisi Final
 
-1. Program sudah dapat membaca nama kolom panjang dari export Google Form, misalnya:
-   - `Saldo Rata-Rata\nDalam 3 bulan terakhir...`
-   - `Frekuensi Transaksi\nDalam 3 bulan terakhir...`
-   - `Nominal Transaksi Bulanan\nDalam 3 bulan terakhir...`
-   - `Keragaman Fitur yang Digunakan\nFitur digital banking/mobile banking...`
-   - `Respons terhadap Promosi...`
-   - `Kepuasan Layanan...`
-   - `Kepercayaan terhadap Keamanan Layanan...`
+Program ini digunakan untuk penelitian:
 
-2. Input utama K-Means tetap hanya 7 variabel utama sesuai Bab 3:
-   - `Saldo_Rata_Rata`
-   - `Frekuensi_Transaksi`
-   - `Nominal_Transaksi_Bulanan`
-   - `Keragaman_Fitur`
-   - `Respons_Promosi`
-   - `Kepuasan_Layanan`
-   - `Kepercayaan_Keamanan`
+**Analisis Segmentasi Nasabah Digital Banking Berdasarkan Perilaku Penggunaan 3 Bulan Terakhir Menggunakan K-Means Clustering untuk Strategi Pemasaran.**
 
-3. Data profil responden tidak masuk ke K-Means, tetapi digunakan untuk interpretasi:
-   - `Usia`
-   - `Jenis_Kelamin`
-   - `Jenis_Pekerjaan`
-   - `Pendapatan_Bulanan`
-   - `Jenis_Layanan_Digital`
-   - `Aplikasi_Digital_Banking`
-
-4. Data pendukung Section 5 tidak masuk ke K-Means, tetapi digunakan untuk rekomendasi strategi pemasaran:
-   - `Tujuan_Penggunaan`
-   - `Tujuan_Keuangan`
-   - `Minat_Tabungan_Deposito`
-   - `Jenis_Promosi_Disukai`
-   - `Preferensi_Promo_Tabungan_Deposito`
-   - `Faktor_Minat_Tabungan_Deposito`
-   - `Media_Promosi_Diperhatikan`
-   - `Kendala_Penggunaan`
-   - `Faktor_Peningkatan_Minat`
-   - `Aktivitas_Pembayaran_Digital`
-
-5. Program menambahkan menu 
-   - Uji Validitas menggunakan korelasi item-total.
-   - Uji Reliabilitas menggunakan Cronbach's Alpha.
-
+1. Seluruh menu, fungsi, tabel, ekspor, dan narasi 
+2. Input K-Means menggunakan tujuh variabel utama:
+   - Saldo rata-rata
+   - Frekuensi transaksi
+   - Nominal transaksi bulanan
+   - Keragaman fitur
+   - Respons terhadap promosi
+   - Kepuasan layanan
+   - Kepercayaan terhadap keamanan
+3. Label cluster ditentukan dari posisi centroid pada data yang telah distandardisasi, sehingga dibandingkan dengan rata-rata seluruh responden.
+4. Deskripsi cluster menjelaskan posisi **tinggi, sedang, atau rendah** pada seluruh tujuh variabel utama.
+5. Usia, jenis kelamin, pekerjaan, pendapatan, aplikasi, preferensi promosi, media, dan kendala hanya menjadi data pendukung.
+6. Narasi pekerjaan menampilkan tiga kategori terbesar beserta persentasenya. Istilah “didominasi” hanya digunakan jika satu kategori melebihi 50% anggota cluster.
+7. Rekomendasi strategi disusun dari karakteristik perilaku cluster terlebih dahulu, kemudian disesuaikan dengan preferensi dan kendala anggota.
+8. Ekspor XLSX berisi hasil clustering, profil cluster, centroid asli, centroid relatif, evaluasi K, dan ringkasan cleaning.
 
 ```bash
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Jika command `streamlit` tidak terbaca di Windows:
+Jika perintah `streamlit` tidak dikenali:
 
 ```bash
 python -m streamlit run app.py
