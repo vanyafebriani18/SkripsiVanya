@@ -1093,6 +1093,57 @@ def run_clustering(
 
 
 # =========================================================
+# FUNGSI VISUALISASI
+# =========================================================
+def _adaptive_jitter_width(series: pd.Series, proportion: float = 0.22) -> float:
+    """Menentukan lebar jitter dari jarak antar-nilai unik pada satu variabel."""
+    numeric = pd.to_numeric(series, errors="coerce").dropna().to_numpy(dtype=float)
+    if numeric.size == 0:
+        return 0.0
+
+    unique_values = np.unique(numeric)
+    if unique_values.size > 1:
+        positive_gaps = np.diff(np.sort(unique_values))
+        positive_gaps = positive_gaps[positive_gaps > 0]
+        if positive_gaps.size:
+            return float(np.min(positive_gaps) * proportion)
+
+    # Cadangan bila seluruh nilai sama: gunakan 2% dari skala nilai.
+    reference = max(float(np.nanmedian(np.abs(numeric))), 1.0)
+    return reference * 0.02
+
+
+def build_jittered_plot_data(
+    result_df: pd.DataFrame,
+    x_feature: str,
+    y_feature: str,
+    random_state: int = 42,
+) -> Tuple[pd.DataFrame, float, float]:
+    """
+    Membuat salinan data khusus visualisasi dengan jitter.
+
+    Jitter hanya menggeser posisi titik pada grafik agar responden dengan nilai
+    yang sama tidak saling menutupi. Nilai asli, label cluster, centroid,
+    Silhouette Coefficient, dan hasil K-Means tidak diubah.
+    """
+    plot_df = result_df.copy()
+    plot_df["Nilai_X_Asli"] = pd.to_numeric(plot_df[x_feature], errors="coerce")
+    plot_df["Nilai_Y_Asli"] = pd.to_numeric(plot_df[y_feature], errors="coerce")
+
+    jitter_x = _adaptive_jitter_width(plot_df["Nilai_X_Asli"])
+    jitter_y = _adaptive_jitter_width(plot_df["Nilai_Y_Asli"])
+
+    rng = np.random.default_rng(random_state)
+    plot_df["Plot_X"] = plot_df["Nilai_X_Asli"] + rng.uniform(
+        -jitter_x, jitter_x, len(plot_df)
+    )
+    plot_df["Plot_Y"] = plot_df["Nilai_Y_Asli"] + rng.uniform(
+        -jitter_y, jitter_y, len(plot_df)
+    )
+    return plot_df, jitter_x, jitter_y
+
+
+# =========================================================
 # FUNGSI FORMAT DAN EKSPOR
 # =========================================================
 def format_rupiah(value: float) -> str:
@@ -1586,6 +1637,123 @@ def main() -> None:
         c2.metric("Jumlah cluster", selected_k)
         c3.metric("Kualitas struktur", quality_label(sil_score))
 
+        # Scatter plot ditempatkan sebagai visualisasi utama hasil clustering.
+        col_x, col_y = st.columns(2)
+        with col_x:
+            x_feature = st.selectbox(
+                "Variabel sumbu X",
+                FEATURE_COLUMNS,
+                index=1,
+                format_func=lambda x: DISPLAY_NAMES[x],
+            )
+        with col_y:
+            y_feature = st.selectbox(
+                "Variabel sumbu Y",
+                FEATURE_COLUMNS,
+                index=0,
+                format_func=lambda x: DISPLAY_NAMES[x],
+            )
+
+        plot_df, jitter_x, jitter_y = build_jittered_plot_data(
+            result_df,
+            x_feature,
+            y_feature,
+            random_state=42,
+        )
+
+        hover_data = {
+            "Plot_X": False,
+            "Plot_Y": False,
+            "Nilai_X_Asli": True,
+            "Nilai_Y_Asli": True,
+            "Cluster": True,
+        }
+        for column in ["Customer_ID", "Usia", "Jenis_Pekerjaan"]:
+            if column in plot_df.columns:
+                hover_data[column] = True
+
+        fig_scatter = px.scatter(
+            plot_df,
+            x="Plot_X",
+            y="Plot_Y",
+            color="Nama_Segmen",
+            hover_data=hover_data,
+            labels={
+                "Plot_X": DISPLAY_NAMES[x_feature],
+                "Plot_Y": DISPLAY_NAMES[y_feature],
+                "Nilai_X_Asli": f"{DISPLAY_NAMES[x_feature]} (nilai asli)",
+                "Nilai_Y_Asli": f"{DISPLAY_NAMES[y_feature]} (nilai asli)",
+                "Nama_Segmen": "Nama segmen",
+                "Cluster": "Cluster",
+            },
+            title=(
+                "Visualisasi Persebaran Hasil K-Means Clustering: "
+                f"{DISPLAY_NAMES[x_feature]} dan {DISPLAY_NAMES[y_feature]} "
+                f"(n={len(plot_df)})"
+            ),
+            opacity=0.72,
+        )
+        fig_scatter.update_traces(
+            marker=dict(
+                size=8,
+                line=dict(width=0.4, color="white"),
+            )
+        )
+
+        # Centroid ditampilkan pada posisi asli (tanpa jitter) dengan simbol X.
+        centroid_plot = centroid_original.copy()
+        centroid_plot["Nama_Segmen"] = centroid_plot["Cluster"].map(segment_map)
+        fig_scatter.add_trace(
+            go.Scatter(
+                x=centroid_plot[x_feature],
+                y=centroid_plot[y_feature],
+                mode="markers+text",
+                marker=dict(
+                    symbol="x",
+                    size=18,
+                    color="#111827",
+                    line=dict(width=3, color="#111827"),
+                ),
+                text=[f"C{int(cluster)}" for cluster in centroid_plot["Cluster"]],
+                textposition="top center",
+                customdata=np.column_stack(
+                    [
+                        centroid_plot["Cluster"].to_numpy(),
+                        centroid_plot["Nama_Segmen"].to_numpy(),
+                    ]
+                ),
+                hovertemplate=(
+                    "<b>Centroid Cluster %{customdata[0]}</b><br>"
+                    "Segmen: %{customdata[1]}<br>"
+                    f"{DISPLAY_NAMES[x_feature]}: %{{x:,.2f}}<br>"
+                    f"{DISPLAY_NAMES[y_feature]}: %{{y:,.2f}}"
+                    "<extra></extra>"
+                ),
+                name="Centroid",
+            )
+        )
+        fig_scatter.update_layout(
+            height=680,
+            xaxis_title=DISPLAY_NAMES[x_feature],
+            yaxis_title=DISPLAY_NAMES[y_feature],
+            legend_title="Nama segmen",
+            hovermode="closest",
+        )
+        st.plotly_chart(fig_scatter, use_container_width=True)
+
+        st.markdown(
+            f"""
+            <div class="note">
+            Setiap titik merepresentasikan satu dari <b>{len(plot_df)} responden</b>.
+            Pergeseran kecil (<i>jitter</i>) sebesar ±{jitter_x:,.2f} pada sumbu X
+            dan ±{jitter_y:,.2f} pada sumbu Y hanya diterapkan pada tampilan agar
+            responden dengan nilai sama tidak saling menutupi. Simbol <b>X</b>
+            menunjukkan centroid. Data asli dan hasil K-Means tidak berubah.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         distribution = (
             result_df.groupby(["Cluster", "Nama_Segmen"])
             .size()
@@ -1621,31 +1789,6 @@ def main() -> None:
             yaxis_title="Cluster",
         )
         st.plotly_chart(fig_heat, use_container_width=True)
-
-        col_x, col_y = st.columns(2)
-        with col_x:
-            x_feature = st.selectbox(
-                "Variabel sumbu X",
-                FEATURE_COLUMNS,
-                index=1,
-                format_func=lambda x: DISPLAY_NAMES[x],
-            )
-        with col_y:
-            y_feature = st.selectbox(
-                "Variabel sumbu Y",
-                FEATURE_COLUMNS,
-                index=3,
-                format_func=lambda x: DISPLAY_NAMES[x],
-            )
-        fig_scatter = px.scatter(
-            result_df,
-            x=x_feature,
-            y=y_feature,
-            color="Nama_Segmen",
-            hover_data=[c for c in ["Customer_ID", "Usia", "Jenis_Pekerjaan"] if c in result_df.columns],
-            title=f"Visualisasi Cluster: {DISPLAY_NAMES[x_feature]} dan {DISPLAY_NAMES[y_feature]}",
-        )
-        st.plotly_chart(fig_scatter, use_container_width=True)
 
         st.markdown("**Centroid dalam skala asli**")
         st.dataframe(
