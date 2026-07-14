@@ -1112,6 +1112,57 @@ def select_most_discriminative_features(
     return ordered[0], ordered[1], scores
 
 
+def _jitter_width(series: pd.Series, intensity: float = 0.14) -> float:
+    """Menghitung lebar jitter adaptif berdasarkan jarak nilai unik terkecil."""
+    numeric = pd.to_numeric(series, errors="coerce").dropna()
+    if numeric.empty:
+        return 0.0
+
+    unique_values = np.sort(numeric.unique())
+    if len(unique_values) > 1:
+        positive_gaps = np.diff(unique_values)
+        positive_gaps = positive_gaps[positive_gaps > 0]
+        if len(positive_gaps) > 0:
+            return float(np.min(positive_gaps) * intensity)
+
+    value_range = float(numeric.max() - numeric.min())
+    if value_range > 0:
+        return value_range * 0.01
+
+    # Variabel konstan seharusnya sudah dihentikan sebelum clustering,
+    # tetapi fallback kecil ini mencegah error saat visualisasi.
+    return max(abs(float(numeric.iloc[0])) * 0.01, 0.01)
+
+
+def build_jittered_plot_data(
+    df: pd.DataFrame,
+    x_feature: str,
+    y_feature: str,
+    random_state: int = 42,
+    intensity: float = 0.14,
+) -> pd.DataFrame:
+    """
+    Membuat salinan data khusus plot dengan jitter deterministik.
+
+    Jitter hanya menggeser posisi titik pada scatter plot agar responden dengan
+    koordinat sama tidak saling menutupi. Data asli dan hasil K-Means tidak berubah.
+    """
+    plot_df = df.copy()
+    rng = np.random.default_rng(random_state)
+
+    x_width = _jitter_width(plot_df[x_feature], intensity=intensity)
+    y_width = _jitter_width(plot_df[y_feature], intensity=intensity)
+
+    plot_df["X_Plot"] = pd.to_numeric(
+        plot_df[x_feature], errors="coerce"
+    ) + rng.uniform(-x_width, x_width, len(plot_df))
+    plot_df["Y_Plot"] = pd.to_numeric(
+        plot_df[y_feature], errors="coerce"
+    ) + rng.uniform(-y_width, y_width, len(plot_df))
+
+    return plot_df
+
+
 # =========================================================
 # FUNGSI FORMAT DAN EKSPOR
 # =========================================================
@@ -1637,20 +1688,38 @@ def main() -> None:
                 key="scatter_y_feature",
             )
 
-        hover_columns = [
-            column
-            for column in ["Customer_ID", "Cluster", "Usia", "Jenis_Pekerjaan"]
-            if column in result_df.columns
-        ]
-        fig_scatter = px.scatter(
+        # Jitter dibuat pada salinan data khusus visualisasi. Nilai asli tetap
+        # disimpan dan ditampilkan pada hover, sehingga hasil analisis tidak berubah.
+        plot_df = build_jittered_plot_data(
             result_df,
-            x=x_feature,
-            y=y_feature,
+            x_feature=x_feature,
+            y_feature=y_feature,
+            random_state=42,
+            intensity=0.14,
+        )
+
+        hover_data = {
+            "X_Plot": False,
+            "Y_Plot": False,
+            x_feature: True,
+            y_feature: True,
+            "Nama_Segmen": True,
+        }
+        for column in ["Customer_ID", "Cluster", "Usia", "Jenis_Pekerjaan"]:
+            if column in plot_df.columns:
+                hover_data[column] = True
+
+        fig_scatter = px.scatter(
+            plot_df,
+            x="X_Plot",
+            y="Y_Plot",
             color="Nama_Segmen",
-            hover_data=hover_columns,
+            hover_data=hover_data,
             labels={
-                x_feature: DISPLAY_NAMES[x_feature],
-                y_feature: DISPLAY_NAMES[y_feature],
+                "X_Plot": DISPLAY_NAMES[x_feature],
+                "Y_Plot": DISPLAY_NAMES[y_feature],
+                x_feature: f"{DISPLAY_NAMES[x_feature]} (nilai asli)",
+                y_feature: f"{DISPLAY_NAMES[y_feature]} (nilai asli)",
                 "Nama_Segmen": "Nama segmen",
                 "Cluster": "Cluster",
             },
@@ -1659,12 +1728,12 @@ def main() -> None:
                 f"{DISPLAY_NAMES[x_feature]} dan {DISPLAY_NAMES[y_feature]} "
                 f"(n={len(result_df)})"
             ),
-            opacity=0.62,
+            opacity=0.68,
         )
         fig_scatter.update_traces(
             marker=dict(
-                size=9,
-                line=dict(width=0.6, color="white"),
+                size=8,
+                line=dict(width=0.45, color="white"),
             )
         )
 
@@ -1681,9 +1750,11 @@ def main() -> None:
             f"""
             <div class="note">
             Setiap titik merepresentasikan satu dari <b>{len(result_df)} responden</b>.
-            Scatter plot hanya menampilkan dua variabel terpilih; keanggotaan cluster tetap dihitung
-            menggunakan seluruh <b>tujuh variabel penelitian</b>. Tidak digunakan
-            PCA maupun pergeseran titik (<i>jitter</i>).
+            Pergeseran kecil (<i>jitter</i>) hanya diterapkan pada posisi titik dalam
+            visualisasi agar responden dengan nilai yang sama tidak saling menutupi.
+            Nilai asli tetap ditampilkan saat kursor diarahkan ke titik, sedangkan
+            keanggotaan cluster tetap dihitung menggunakan seluruh <b>tujuh variabel penelitian</b>.
+            Jitter tidak mengubah data, centroid, hasil K-Means, maupun nilai Silhouette.
             </div>
             """,
             unsafe_allow_html=True,
