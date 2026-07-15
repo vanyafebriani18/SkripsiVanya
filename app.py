@@ -2,12 +2,14 @@ from __future__ import annotations
 
 # REVISI DOSEN PEMBIMBING: TANPA SCATTER PLOT; K HANYA 4 ATAU 5; BAR TANPA NAMA SEGMEN
 
+import base64
 import io
 import os
 import re
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -1218,6 +1220,32 @@ def make_summary_text(
 
 
 # =========================================================
+# LOGO DAN TAMPILAN
+# =========================================================
+def find_logo_path() -> Optional[Path]:
+    """Mencari logo pada root repository atau folder assets."""
+    candidates = [
+        Path(__file__).resolve().parent / "logo.png",
+        Path(__file__).resolve().parent / "assets" / "logo.png",
+        Path("logo.png"),
+        Path("assets/logo.png"),
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
+
+
+def logo_data_uri() -> str:
+    """Mengubah logo lokal menjadi data URI agar pasti tampil di header HTML."""
+    logo_path = find_logo_path()
+    if logo_path is None:
+        return ""
+    encoded = base64.b64encode(logo_path.read_bytes()).decode("ascii")
+    return f"data:image/png;base64,{encoded}"
+
+
+# =========================================================
 # TAMPILAN STREAMLIT
 # =========================================================
 def configure_page() -> None:
@@ -1227,20 +1255,56 @@ def configure_page() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
+
+    # Menampilkan logo kecil di navigasi/sidebar Streamlit bila fitur tersedia.
+    logo_path = find_logo_path()
+    if logo_path is not None:
+        try:
+            st.logo(str(logo_path))
+        except Exception:
+            pass
+
     st.markdown(
         f"""
         <style>
-        .block-container {{padding-top: 1.2rem; padding-bottom: 2rem;}}
+        .stApp {{background: #f7faf8;}}
+        .block-container {{padding-top: 1.25rem; padding-bottom: 2rem;}}
         .hero {{
             background: linear-gradient(135deg, {GREEN}, #128353);
             color: white;
-            padding: 26px 30px;
+            padding: 20px 28px;
             border-radius: 18px;
-            margin-bottom: 18px;
+            margin-bottom: 20px;
             box-shadow: 0 8px 22px rgba(0,77,36,.16);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 22px;
+            min-height: 112px;
         }}
-        .hero h1 {{margin: 0 0 8px 0; font-size: 31px;}}
-        .hero p {{margin: 0; opacity: .95;}}
+        .hero h1 {{
+            margin: 0;
+            font-size: 32px;
+            line-height: 1.22;
+            font-weight: 750;
+        }}
+        .hero-logo-box {{
+            background: rgba(255,255,255,.97);
+            border-radius: 14px;
+            padding: 9px 14px;
+            min-width: 108px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,.08);
+        }}
+        .hero-logo {{
+            display: block;
+            max-height: 78px;
+            max-width: 125px;
+            width: auto;
+            object-fit: contain;
+        }}
         .cluster-card {{
             background: white;
             border: 1px solid #e3ece7;
@@ -1265,6 +1329,12 @@ def configure_page() -> None:
             margin: 8px 0 14px 0;
         }}
         div[data-testid="stMetricValue"] {{font-size: 25px;}}
+        @media (max-width: 760px) {{
+            .hero {{padding: 20px; min-height: 0;}}
+            .hero h1 {{font-size: 25px;}}
+            .hero-logo-box {{min-width: 78px; padding: 7px 10px;}}
+            .hero-logo {{max-height: 58px; max-width: 90px;}}
+        }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -1292,11 +1362,17 @@ def _levels_table(profile_row: pd.Series) -> pd.DataFrame:
 def main() -> None:
     configure_page()
 
+    logo_uri = logo_data_uri()
+    logo_html = (
+        f'<div class="hero-logo-box"><img class="hero-logo" src="{logo_uri}" alt="Logo"></div>'
+        if logo_uri
+        else ""
+    )
     st.markdown(
-        """
+        f"""
         <div class="hero">
           <h1>Dashboard Segmentasi Pengguna Mobile Banking</h1>
-          <p>Preprocessing data, K-Means Clustering, Elbow Method, Silhouette Coefficient, interpretasi perilaku, dan rekomendasi strategi pemasaran.</p>
+          {logo_html}
         </div>
         """,
         unsafe_allow_html=True,
@@ -1323,15 +1399,7 @@ def main() -> None:
         )
 
     if uploaded_file is None:
-        st.markdown(
-            """
-            <div class="note">
-            Unggah file kuesioner untuk memulai analisis. Program membaca satu item skala 1–5 untuk respons promosi, kepuasan layanan, dan kepercayaan keamanan. Ketiga variabel tersebut dipakai langsung sebagai fitur clustering sesuai instrumen final.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.dataframe(template_df, use_container_width=True, hide_index=True)
+        st.info("Silakan unggah file CSV/XLSX hasil kuesioner melalui panel di sebelah kiri.")
         return
 
     try:
