@@ -1552,7 +1552,7 @@ def main() -> None:
         st.subheader("Penentuan Jumlah Cluster")
         c1, c2, c3 = st.columns(3)
         c1.metric("K digunakan", selected_k)
-        c2.metric("K rekomendasi Silhouette", recommended_k)
+        c2.metric("K K terpilih berdasarkan evaluasi", recommended_k)
         c3.metric("Silhouette K terpilih", f"{sil_score:.3f}")
 
         fig_elbow = px.line(
