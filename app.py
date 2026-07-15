@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import base64
+# REVISI DOSEN PEMBIMBING: TANPA SCATTER PLOT; K HANYA 4 ATAU 5; BAR TANPA NAMA SEGMEN
+
 import io
 import os
 import re
 import unicodedata
 from collections import Counter
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 os.environ.setdefault("OMP_NUM_THREADS", "1")
@@ -87,8 +87,6 @@ DISPLAY_NAMES = {
     "Aplikasi_Digital_Banking": "Aplikasi digital banking",
 }
 
-# Alias dibuat panjang agar dapat membaca hasil ekspor Google Forms yang memakai
-# kalimat pertanyaan penuh, serta file yang kolomnya sudah disederhanakan.
 COLUMN_ALIASES: Dict[str, List[str]] = {
     "Customer_ID": [
         "customer_id",
@@ -303,10 +301,6 @@ class CleaningReport:
     outlier_ekstrem_terdeteksi: int
     kolom_konstan: List[str]
 
-
-# =========================================================
-# FUNGSI PEMROSESAN DATA
-# =========================================================
 def normalize_text(value: object) -> str:
     text = "" if value is None else str(value)
     text = unicodedata.normalize("NFKD", text)
@@ -1093,77 +1087,6 @@ def run_clustering(
 
 
 # =========================================================
-# FUNGSI VISUALISASI
-# =========================================================
-def select_most_discriminative_features(
-    centroid_z: pd.DataFrame,
-) -> Tuple[str, str, pd.Series]:
-    """
-    Memilih dua variabel yang paling membedakan posisi centroid antarkluster.
-
-    Penilaian menggunakan simpangan baku centroid pada skala hasil standardisasi.
-    Fungsi ini hanya menentukan tampilan awal scatter plot dan tidak mengubah
-    proses K-Means maupun keanggotaan cluster.
-    """
-    scores = centroid_z[FEATURE_COLUMNS].std(axis=0, ddof=0).fillna(0.0)
-    ordered = scores.sort_values(ascending=False).index.tolist()
-    if len(ordered) < 2:
-        return FEATURE_COLUMNS[0], FEATURE_COLUMNS[1], scores
-    return ordered[0], ordered[1], scores
-
-
-def _jitter_width(series: pd.Series, intensity: float = 0.14) -> float:
-    """Menghitung lebar jitter adaptif berdasarkan jarak nilai unik terkecil."""
-    numeric = pd.to_numeric(series, errors="coerce").dropna()
-    if numeric.empty:
-        return 0.0
-
-    unique_values = np.sort(numeric.unique())
-    if len(unique_values) > 1:
-        positive_gaps = np.diff(unique_values)
-        positive_gaps = positive_gaps[positive_gaps > 0]
-        if len(positive_gaps) > 0:
-            return float(np.min(positive_gaps) * intensity)
-
-    value_range = float(numeric.max() - numeric.min())
-    if value_range > 0:
-        return value_range * 0.01
-
-    # Variabel konstan seharusnya sudah dihentikan sebelum clustering,
-    # tetapi fallback kecil ini mencegah error saat visualisasi.
-    return max(abs(float(numeric.iloc[0])) * 0.01, 0.01)
-
-
-def build_jittered_plot_data(
-    df: pd.DataFrame,
-    x_feature: str,
-    y_feature: str,
-    random_state: int = 42,
-    intensity: float = 0.14,
-) -> pd.DataFrame:
-    """
-    Membuat salinan data khusus plot dengan jitter deterministik.
-
-    Jitter hanya menggeser posisi titik pada scatter plot agar responden dengan
-    koordinat sama tidak saling menutupi. Data asli dan hasil K-Means tidak berubah.
-    """
-    plot_df = df.copy()
-    rng = np.random.default_rng(random_state)
-
-    x_width = _jitter_width(plot_df[x_feature], intensity=intensity)
-    y_width = _jitter_width(plot_df[y_feature], intensity=intensity)
-
-    plot_df["X_Plot"] = pd.to_numeric(
-        plot_df[x_feature], errors="coerce"
-    ) + rng.uniform(-x_width, x_width, len(plot_df))
-    plot_df["Y_Plot"] = pd.to_numeric(
-        plot_df[y_feature], errors="coerce"
-    ) + rng.uniform(-y_width, y_width, len(plot_df))
-
-    return plot_df
-
-
-# =========================================================
 # FUNGSI FORMAT DAN EKSPOR
 # =========================================================
 def format_rupiah(value: float) -> str:
@@ -1295,32 +1218,6 @@ def make_summary_text(
 
 
 # =========================================================
-# LOGO DAN TAMPILAN
-# =========================================================
-def find_logo_path() -> Optional[Path]:
-    """Mencari logo pada root repository atau folder assets."""
-    candidates = [
-        Path(__file__).resolve().parent / "logo.png",
-        Path(__file__).resolve().parent / "assets" / "logo.png",
-        Path("logo.png"),
-        Path("assets/logo.png"),
-    ]
-    for candidate in candidates:
-        if candidate.exists() and candidate.is_file():
-            return candidate
-    return None
-
-
-def logo_data_uri() -> str:
-    """Mengubah logo lokal menjadi data URI agar pasti tampil di header HTML."""
-    logo_path = find_logo_path()
-    if logo_path is None:
-        return ""
-    encoded = base64.b64encode(logo_path.read_bytes()).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
-
-
-# =========================================================
 # TAMPILAN STREAMLIT
 # =========================================================
 def configure_page() -> None:
@@ -1330,56 +1227,20 @@ def configure_page() -> None:
         layout="wide",
         initial_sidebar_state="expanded",
     )
-
-    # Menampilkan logo kecil di navigasi/sidebar Streamlit bila fitur tersedia.
-    logo_path = find_logo_path()
-    if logo_path is not None:
-        try:
-            st.logo(str(logo_path))
-        except Exception:
-            pass
-
     st.markdown(
         f"""
         <style>
-        .stApp {{background: #f7faf8;}}
-        .block-container {{padding-top: 1.25rem; padding-bottom: 2rem;}}
+        .block-container {{padding-top: 1.2rem; padding-bottom: 2rem;}}
         .hero {{
             background: linear-gradient(135deg, {GREEN}, #128353);
             color: white;
-            padding: 20px 28px;
+            padding: 26px 30px;
             border-radius: 18px;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             box-shadow: 0 8px 22px rgba(0,77,36,.16);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 22px;
-            min-height: 112px;
         }}
-        .hero h1 {{
-            margin: 0;
-            font-size: 32px;
-            line-height: 1.22;
-            font-weight: 750;
-        }}
-        .hero-logo-box {{
-            background: rgba(255,255,255,.97);
-            border-radius: 14px;
-            padding: 9px 14px;
-            min-width: 108px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,.08);
-        }}
-        .hero-logo {{
-            display: block;
-            max-height: 78px;
-            max-width: 125px;
-            width: auto;
-            object-fit: contain;
-        }}
+        .hero h1 {{margin: 0 0 8px 0; font-size: 31px;}}
+        .hero p {{margin: 0; opacity: .95;}}
         .cluster-card {{
             background: white;
             border: 1px solid #e3ece7;
@@ -1404,12 +1265,6 @@ def configure_page() -> None:
             margin: 8px 0 14px 0;
         }}
         div[data-testid="stMetricValue"] {{font-size: 25px;}}
-        @media (max-width: 760px) {{
-            .hero {{padding: 20px; min-height: 0;}}
-            .hero h1 {{font-size: 25px;}}
-            .hero-logo-box {{min-width: 78px; padding: 7px 10px;}}
-            .hero-logo {{max-height: 58px; max-width: 90px;}}
-        }}
         </style>
         """,
         unsafe_allow_html=True,
@@ -1437,17 +1292,11 @@ def _levels_table(profile_row: pd.Series) -> pd.DataFrame:
 def main() -> None:
     configure_page()
 
-    logo_uri = logo_data_uri()
-    logo_html = (
-        f'<div class="hero-logo-box"><img class="hero-logo" src="{logo_uri}" alt="Logo"></div>'
-        if logo_uri
-        else ""
-    )
     st.markdown(
-        f"""
+        """
         <div class="hero">
           <h1>Dashboard Segmentasi Pengguna Mobile Banking</h1>
-          {logo_html}
+          <p>Preprocessing data, K-Means Clustering, Elbow Method, Silhouette Coefficient, interpretasi perilaku, dan rekomendasi strategi pemasaran.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1474,7 +1323,15 @@ def main() -> None:
         )
 
     if uploaded_file is None:
-        st.info("Silakan unggah file CSV/XLSX hasil kuesioner melalui panel di sebelah kiri.")
+        st.markdown(
+            """
+            <div class="note">
+            Unggah file kuesioner untuk memulai analisis. Program membaca satu item skala 1–5 untuk respons promosi, kepuasan layanan, dan kepercayaan keamanan. Ketiga variabel tersebut dipakai langsung sebagai fitur clustering sesuai instrumen final.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        st.dataframe(template_df, use_container_width=True, hide_index=True)
         return
 
     try:
@@ -1500,17 +1357,36 @@ def main() -> None:
         return
 
     evaluation_df = evaluate_k(x_scaled_for_eval, max_k=max_k)
-    valid_eval = evaluation_df.dropna(subset=["Silhouette"])
-    recommended_k = int(valid_eval.loc[valid_eval["Silhouette"].idxmax(), "K"])
+
+    # Sesuai arahan dosen pembimbing, hasil akhir difokuskan pada K = 4 atau K = 5.
+    allowed_k = [
+        int(k) for k in evaluation_df["K"].tolist()
+        if int(k) in (4, 5)
+    ]
+    if not allowed_k:
+        st.error("Data valid belum cukup untuk membentuk K = 4 atau K = 5.")
+        return
+
+    valid_eval_45 = evaluation_df[
+        evaluation_df["K"].isin(allowed_k)
+    ].dropna(subset=["Silhouette"])
+    if valid_eval_45.empty:
+        recommended_k = allowed_k[0]
+    else:
+        recommended_k = int(
+            valid_eval_45.loc[valid_eval_45["Silhouette"].idxmax(), "K"]
+        )
 
     with st.sidebar:
         selected_k = st.select_slider(
             "Jumlah cluster (K)",
-            options=evaluation_df["K"].astype(int).tolist(),
+            options=allowed_k,
             value=recommended_k,
-            help="Nilai awal mengikuti Silhouette tertinggi. Cocokkan juga dengan titik siku pada grafik Elbow.",
+            help="Sesuai arahan dosen pembimbing, pilihan hasil clustering dibatasi pada K = 4 atau K = 5.",
         )
-        st.caption(f"Rekomendasi otomatis berdasarkan Silhouette: K = {recommended_k}")
+        st.caption(
+            f"Rekomendasi Silhouette terbaik antara K = 4 dan K = 5: K = {recommended_k}"
+        )
 
     result_df, centroid_original, centroid_z, sil_score, _, _ = run_clustering(
         clean_df,
@@ -1657,165 +1533,39 @@ def main() -> None:
         c2.metric("Jumlah cluster", selected_k)
         c3.metric("Kualitas struktur", quality_label(sil_score))
 
-        # Scatter plot ditempatkan sebagai visualisasi pertama hasil clustering.
-        default_x, default_y, separation_scores = select_most_discriminative_features(
-            centroid_z
-        )
-
-        st.markdown("### Visualisasi Persebaran Hasil K-Means Clustering")
         st.caption(
-            "Tampilan awal otomatis menggunakan dua variabel yang paling membedakan "
-            "posisi centroid. Pengguna tetap dapat mengganti kedua sumbu."
+            "Visualisasi hasil hanya menampilkan jumlah anggota pada setiap cluster. "
+            "Nama segmen dijelaskan pada tab Interpretasi & Strategi."
         )
 
-        col_x, col_y = st.columns(2)
-        with col_x:
-            x_feature = st.selectbox(
-                "Variabel sumbu X",
-                FEATURE_COLUMNS,
-                index=FEATURE_COLUMNS.index(default_x),
-                format_func=lambda x: DISPLAY_NAMES[x],
-                key="scatter_x_feature",
-            )
-        with col_y:
-            y_options = [feature for feature in FEATURE_COLUMNS if feature != x_feature]
-            default_y_selected = default_y if default_y in y_options else y_options[0]
-            y_feature = st.selectbox(
-                "Variabel sumbu Y",
-                y_options,
-                index=y_options.index(default_y_selected),
-                format_func=lambda x: DISPLAY_NAMES[x],
-                key="scatter_y_feature",
-            )
-
-        # Jitter dibuat pada salinan data khusus visualisasi. Nilai asli tetap
-        # disimpan dan ditampilkan pada hover, sehingga hasil analisis tidak berubah.
-        plot_df = build_jittered_plot_data(
-            result_df,
-            x_feature=x_feature,
-            y_feature=y_feature,
-            random_state=42,
-            intensity=0.14,
-        )
-
-        hover_data = {
-            "X_Plot": False,
-            "Y_Plot": False,
-            x_feature: True,
-            y_feature: True,
-            "Nama_Segmen": True,
-        }
-        for column in ["Customer_ID", "Cluster", "Usia", "Jenis_Pekerjaan"]:
-            if column in plot_df.columns:
-                hover_data[column] = True
-
-        fig_scatter = px.scatter(
-            plot_df,
-            x="X_Plot",
-            y="Y_Plot",
-            color="Nama_Segmen",
-            hover_data=hover_data,
-            labels={
-                "X_Plot": DISPLAY_NAMES[x_feature],
-                "Y_Plot": DISPLAY_NAMES[y_feature],
-                x_feature: f"{DISPLAY_NAMES[x_feature]} (nilai asli)",
-                y_feature: f"{DISPLAY_NAMES[y_feature]} (nilai asli)",
-                "Nama_Segmen": "Nama segmen",
-                "Cluster": "Cluster",
-            },
-            title=(
-                "Visualisasi Cluster: "
-                f"{DISPLAY_NAMES[x_feature]} dan {DISPLAY_NAMES[y_feature]} "
-                f"(n={len(result_df)})"
-            ),
-            opacity=0.68,
-        )
-        fig_scatter.update_traces(
-            marker=dict(
-                size=8,
-                line=dict(width=0.45, color="white"),
-            )
-        )
-
-        fig_scatter.update_layout(
-            height=680,
-            xaxis_title=DISPLAY_NAMES[x_feature],
-            yaxis_title=DISPLAY_NAMES[y_feature],
-            legend_title="Nama segmen",
-            hovermode="closest",
-        )
-        st.plotly_chart(fig_scatter, use_container_width=True)
-
-        st.markdown(
-            f"""
-            <div class="note">
-            Setiap titik merepresentasikan satu dari <b>{len(result_df)} responden</b>.
-            Pergeseran kecil (<i>jitter</i>) hanya diterapkan pada posisi titik dalam
-            visualisasi agar responden dengan nilai yang sama tidak saling menutupi.
-            Nilai asli tetap ditampilkan saat kursor diarahkan ke titik, sedangkan
-            keanggotaan cluster tetap dihitung menggunakan seluruh <b>tujuh variabel penelitian</b>.
-            Jitter tidak mengubah data, centroid, hasil K-Means, maupun nilai Silhouette.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-        with st.expander("Lihat alasan pemilihan sumbu awal"):
-            score_df = (
-                separation_scores.rename("Skor_pemisahan_centroid")
-                .sort_values(ascending=False)
-                .reset_index()
-                .rename(columns={"index": "Variabel"})
-            )
-            score_df["Variabel"] = score_df["Variabel"].map(DISPLAY_NAMES)
-            st.dataframe(
-                score_df.style.format({"Skor_pemisahan_centroid": "{:.3f}"}),
-                use_container_width=True,
-                hide_index=True,
-            )
-            st.caption(
-                "Skor lebih tinggi berarti posisi centroid antarcluster lebih beragam "
-                "pada variabel tersebut. Skor ini hanya digunakan untuk menentukan "
-                "tampilan awal grafik."
-            )
-
-        # Heatmap ditampilkan setelah scatter karena merangkum seluruh tujuh variabel.
-        heatmap_data = centroid_z.set_index("Cluster")[FEATURE_COLUMNS]
-        fig_heat = go.Figure(
-            data=go.Heatmap(
-                z=heatmap_data.values,
-                x=[DISPLAY_NAMES[c] for c in FEATURE_COLUMNS],
-                y=[f"Cluster {int(i)}" for i in heatmap_data.index],
-                colorscale="RdYlGn",
-                zmid=0,
-                colorbar_title="Z-score",
-                text=np.round(heatmap_data.values, 2),
-                texttemplate="%{text}",
-            )
-        )
-        fig_heat.update_layout(
-            title="Profil Seluruh Cluster Berdasarkan Tujuh Variabel",
-            xaxis_title="Variabel utama",
-            yaxis_title="Cluster",
-            height=520,
-        )
-        st.plotly_chart(fig_heat, use_container_width=True)
-
-        # Grafik batang tetap dipertahankan sebagai informasi jumlah anggota.
+        # Hasil clustering divisualisasikan hanya melalui jumlah anggota per cluster.
+        # Tidak memakai sumbu X/Y, tidak memilih dua variabel, dan tidak menampilkan nama segmen.
         distribution = (
-            result_df.groupby(["Cluster", "Nama_Segmen"])
+            result_df.groupby("Cluster")
             .size()
             .reset_index(name="Jumlah_Anggota")
+            .sort_values("Cluster")
         )
+        distribution["Label_Cluster"] = distribution["Cluster"].map(
+            lambda cluster_id: f"Cluster {int(cluster_id)}"
+        )
+
         fig_count = px.bar(
             distribution,
-            x="Cluster",
+            x="Label_Cluster",
             y="Jumlah_Anggota",
-            color="Nama_Segmen",
             text="Jumlah_Anggota",
             title="Distribusi Anggota Setiap Cluster",
+            labels={
+                "Label_Cluster": "Cluster",
+                "Jumlah_Anggota": "Jumlah Anggota",
+            },
         )
-        fig_count.update_layout(xaxis_dtick=1, showlegend=True)
+        fig_count.update_traces(textposition="inside")
+        fig_count.update_layout(
+            showlegend=False,
+            xaxis={"categoryorder": "array", "categoryarray": distribution["Label_Cluster"].tolist()},
+        )
         st.plotly_chart(fig_count, use_container_width=True)
 
         st.markdown("**Centroid dalam skala asli**")
@@ -1843,11 +1593,29 @@ def main() -> None:
         st.markdown(
             """
             <div class="note">
-            Nama segmen dan narasi perilaku ditentukan dari posisi centroid terhadap rata-rata seluruh responden pada tujuh variabel utama. Usia, pekerjaan, pendapatan, preferensi promosi, media, dan kendala tidak menentukan keanggotaan atau nama cluster; semuanya hanya memperkaya interpretasi dan rekomendasi. Persentase pada pertanyaan multi-pilih menunjukkan proporsi anggota cluster yang memilih opsi tersebut, sehingga totalnya dapat melebihi 100%.
+            Nama segmen dan narasi perilaku disusun melalui <i>cluster profiling</i> berdasarkan posisi centroid terhadap rata-rata seluruh responden pada tujuh variabel utama. Algoritma K-Means menghasilkan keanggotaan cluster dan centroid, sedangkan nama segmen merupakan label deskriptif yang diberikan peneliti setelah membaca karakteristik centroid. Usia, pekerjaan, pendapatan, preferensi promosi, media, dan kendala tidak menentukan keanggotaan cluster; semuanya hanya memperkaya interpretasi dan rekomendasi.
             </div>
             """,
             unsafe_allow_html=True,
         )
+
+        with st.expander("Dasar interpretasi dan referensi"):
+            st.markdown(
+                f"""
+                **Dasar interpretasi**
+
+                - K-Means membentuk kelompok berdasarkan kedekatan data terhadap centroid.
+                - Profil setiap cluster dibaca dari centroid tujuh variabel utama yang telah distandardisasi.
+                - Nilai z-score ≥ **+{LEVEL_THRESHOLD:.2f}** dikategorikan relatif tinggi, nilai ≤ **−{LEVEL_THRESHOLD:.2f}** relatif rendah, dan nilai di antaranya relatif sedang. Batas ini merupakan aturan operasional penelitian agar interpretasi konsisten, bukan ketentuan mutlak algoritma K-Means.
+                - Nama segmen dibuat peneliti berdasarkan kombinasi karakteristik centroid yang paling menonjol. Nama segmen bukan keluaran otomatis Python.
+
+                **Referensi metodologis**
+
+                1. J. MacQueen, “Some Methods for Classification and Analysis of Multivariate Observations,” *Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability*, vol. 1, pp. 281–297, 1967.
+                2. L. Kaufman and P. J. Rousseeuw, *Finding Groups in Data: An Introduction to Cluster Analysis*. New York: Wiley, 1990, doi: 10.1002/9780470316801.
+                3. G. Punj and D. W. Stewart, “Cluster Analysis in Marketing Research: Review and Suggestions for Application,” *Journal of Marketing Research*, vol. 20, no. 2, pp. 134–148, 1983, doi: 10.1177/002224378302000204.
+                """
+            )
 
         for _, row in profile_df.iterrows():
             st.markdown(
