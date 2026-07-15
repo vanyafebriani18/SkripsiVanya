@@ -1286,7 +1286,7 @@ def configure_page() -> None:
     font-size: 32px;
     line-height: 1.22;
     font-weight: 750;
-    color: #0D6EFD;
+    color: #000080;
 }}
         .hero-logo-box {{
             background: rgba(255,255,255,.97);
