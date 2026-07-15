@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-# REVISI DOSEN PEMBIMBING: TANPA SCATTER PLOT; K HANYA 4 ATAU 5; BAR TANPA NAMA SEGMEN
-
 import base64
 import io
 import os
@@ -1269,25 +1267,27 @@ def configure_page() -> None:
         <style>
         .stApp {{background: #f7faf8;}}
         .block-container {{padding-top: 1.25rem; padding-bottom: 2rem;}}
-        .hero {{
-            background: linear-gradient(135deg, {GREEN}, #128353);
-            color: white;
-            padding: 20px 28px;
-            border-radius: 18px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 22px rgba(0,77,36,.16);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 22px;
-            min-height: 112px;
-        }}
-        .hero h1 {{
-            margin: 0;
-            font-size: 32px;
-            line-height: 1.22;
-            font-weight: 750;
-        }}
+ .hero {{
+    background: white;
+    color: #0D6EFD;
+    padding: 20px 28px;
+    border-radius: 18px;
+    margin-bottom: 20px;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.10);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 22px;
+    min-height: 112px;
+}}
+
+.hero h1 {{
+    margin: 0;
+    font-size: 32px;
+    line-height: 1.22;
+    font-weight: 750;
+    color: #0D6EFD;
+}}
         .hero-logo-box {{
             background: rgba(255,255,255,.97);
             border-radius: 14px;
