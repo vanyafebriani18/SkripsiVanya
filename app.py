@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# REVISI DOSEN PEMBIMBING: TANPA SCATTER PLOT; K HANYA 4 ATAU 5; BAR TANPA NAMA SEGMEN
+
 import io
 import os
 import re
@@ -1194,8 +1196,7 @@ def make_summary_text(
         "",
         "Catatan metodologis:",
         "- K-Means hanya menggunakan tujuh variabel utama penelitian.",
-        "- Interpretasi dilakukan melalui cluster profiling berdasarkan posisi centroid terhadap rata-rata seluruh responden.",
-        "- Label segmen merupakan label deskriptif yang disusun peneliti, bukan keluaran otomatis K-Means.",
+        "- Label segmen ditentukan dari posisi centroid terhadap rata-rata seluruh responden.",
         "- Level tinggi/sedang/rendah bersifat relatif terhadap sampel, bukan penilaian absolut.",
         "- Usia, pekerjaan, pendapatan, preferensi promosi, media, dan kendala hanya digunakan sebagai data pendukung.",
         "",
@@ -1356,17 +1357,29 @@ def main() -> None:
         return
 
     evaluation_df = evaluate_k(x_scaled_for_eval, max_k=max_k)
-    valid_eval = evaluation_df.dropna(subset=["Silhouette"])
-    recommended_k = int(valid_eval.loc[valid_eval["Silhouette"].idxmax(), "K"])
 
-    with st.sidebar:
-        selected_k = st.select_slider(
-            "Jumlah cluster (K)",
-            options=evaluation_df["K"].astype(int).tolist(),
-            value=recommended_k,
-            help="Nilai awal mengikuti Silhouette tertinggi. Cocokkan juga dengan titik siku pada grafik Elbow.",
+    # Sesuai arahan dosen pembimbing, hasil akhir difokuskan pada K = 4 atau K = 5.
+    allowed_k = [
+        int(k) for k in evaluation_df["K"].tolist()
+        if int(k) in (4, 5)
+    ]
+    if not allowed_k:
+        st.error("Data valid belum cukup untuk membentuk K = 4 atau K = 5.")
+        return
+
+    valid_eval_45 = evaluation_df[
+        evaluation_df["K"].isin(allowed_k)
+    ].dropna(subset=["Silhouette"])
+    if valid_eval_45.empty:
+        recommended_k = allowed_k[0]
+    else:
+        recommended_k = int(
+            valid_eval_45.loc[valid_eval_45["Silhouette"].idxmax(), "K"]
         )
-        st.caption(f"Rekomendasi otomatis berdasarkan Silhouette: K = {recommended_k}")
+
+    # K dipilih otomatis berdasarkan nilai Silhouette tertinggi antara K = 4 dan K = 5.
+    # Tidak ada slider/indikator K maupun tulisan rekomendasi di bawah upload file.
+    selected_k = recommended_k
 
     result_df, centroid_original, centroid_z, sil_score, _, _ = run_clustering(
         clean_df,
@@ -1513,30 +1526,41 @@ def main() -> None:
         c2.metric("Jumlah cluster", selected_k)
         c3.metric("Kualitas struktur", quality_label(sil_score))
 
-        # Revisi dosen pembimbing:
-        # Visualisasi hasil clustering dibuat hanya berupa jumlah anggota per cluster.
-        # Nama segmen tidak ditampilkan pada grafik karena tersedia pada tab interpretasi.
+        st.caption(
+            "Visualisasi hasil hanya menampilkan jumlah anggota pada setiap cluster. "
+            "Nama segmen dijelaskan pada tab Interpretasi & Strategi."
+        )
+
+        # Hasil clustering divisualisasikan hanya melalui jumlah anggota per cluster.
+        # Tidak memakai sumbu X/Y, tidak memilih dua variabel, dan tidak menampilkan nama segmen.
         distribution = (
             result_df.groupby("Cluster")
             .size()
             .reset_index(name="Jumlah_Anggota")
+            .sort_values("Cluster")
         )
-        distribution["Hasil_Cluster"] = distribution["Cluster"].map(
-            lambda value: f"Cluster {int(value)}"
+        distribution["Label_Cluster"] = distribution["Cluster"].map(
+            lambda cluster_id: f"Cluster {int(cluster_id)}"
         )
+
         fig_count = px.bar(
             distribution,
-            x="Hasil_Cluster",
+            x="Label_Cluster",
             y="Jumlah_Anggota",
             text="Jumlah_Anggota",
+            color="Label_Cluster",
+            color_discrete_sequence=px.colors.qualitative.Bold,
             title="Distribusi Anggota Setiap Cluster",
             labels={
-                "Hasil_Cluster": "Hasil Cluster",
+                "Label_Cluster": "Cluster",
                 "Jumlah_Anggota": "Jumlah Anggota",
             },
         )
         fig_count.update_traces(textposition="inside")
-        fig_count.update_layout(showlegend=False)
+        fig_count.update_layout(
+            showlegend=False,
+            xaxis={"categoryorder": "array", "categoryarray": distribution["Label_Cluster"].tolist()},
+        )
         st.plotly_chart(fig_count, use_container_width=True)
 
         st.markdown("**Centroid dalam skala asli**")
@@ -1564,49 +1588,29 @@ def main() -> None:
         st.markdown(
             """
             <div class="note">
-            Nama segmen dan narasi perilaku merupakan hasil <i>cluster profiling</i> oleh peneliti berdasarkan posisi centroid terhadap rata-rata seluruh responden pada tujuh variabel utama. Label segmen bukan keluaran otomatis dari algoritma K-Means. Usia, pekerjaan, pendapatan, preferensi promosi, media, dan kendala tidak menentukan keanggotaan atau nama cluster; semuanya hanya memperkaya interpretasi dan rekomendasi. Persentase pada pertanyaan multi-pilih menunjukkan proporsi anggota cluster yang memilih opsi tersebut, sehingga totalnya dapat melebihi 100%.
+            Nama segmen dan narasi perilaku disusun melalui <i>cluster profiling</i> berdasarkan posisi centroid terhadap rata-rata seluruh responden pada tujuh variabel utama. Algoritma K-Means menghasilkan keanggotaan cluster dan centroid, sedangkan nama segmen merupakan label deskriptif yang diberikan peneliti setelah membaca karakteristik centroid. Usia, pekerjaan, pendapatan, preferensi promosi, media, dan kendala tidak menentukan keanggotaan cluster; semuanya hanya memperkaya interpretasi dan rekomendasi.
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        with st.expander("Dasar penentuan interpretasi dan referensi"):
+        with st.expander("Dasar interpretasi dan referensi"):
             st.markdown(
                 f"""
-                **Cara interpretasi pada program**
+                **Dasar interpretasi**
 
-                1. K-Means membentuk cluster dan menghasilkan centroid sebagai nilai rata-rata tiap variabel di dalam cluster.
-                2. Centroid yang telah distandardisasi dibandingkan dengan rata-rata seluruh responden.
-                3. Nilai z-score ≥ **+{LEVEL_THRESHOLD:.2f}** dibaca sebagai **tinggi**, nilai ≤ **−{LEVEL_THRESHOLD:.2f}** sebagai **rendah**, dan nilai di antaranya sebagai **sedang**. Batas ini merupakan aturan operasional penelitian agar profil cluster mudah dibaca, bukan ketentuan baku dari algoritma K-Means.
-                4. Nama segmen disusun peneliti dari kombinasi karakteristik yang paling menonjol pada centroid. Oleh karena itu, nama seperti *High-Value Active User* merupakan label deskriptif hasil penelitian, bukan label yang diberikan otomatis oleh Python.
+                - K-Means membentuk kelompok berdasarkan kedekatan data terhadap centroid.
+                - Profil setiap cluster dibaca dari centroid tujuh variabel utama yang telah distandardisasi.
+                - Nilai z-score ≥ **+{LEVEL_THRESHOLD:.2f}** dikategorikan relatif tinggi, nilai ≤ **−{LEVEL_THRESHOLD:.2f}** relatif rendah, dan nilai di antaranya relatif sedang. Batas ini merupakan aturan operasional penelitian agar interpretasi konsisten, bukan ketentuan mutlak algoritma K-Means.
+                - Nama segmen dibuat peneliti berdasarkan kombinasi karakteristik centroid yang paling menonjol. Nama segmen bukan keluaran otomatis Python.
 
                 **Referensi metodologis**
 
-                - J. MacQueen, “Some Methods for Classification and Analysis of Multivariate Observations,” *Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability*, vol. 1, pp. 281–297, 1967.
-                - L. Kaufman and P. J. Rousseeuw, *Finding Groups in Data: An Introduction to Cluster Analysis*. New York: Wiley, 1990. doi: 10.1002/9780470316801.
-                - G. Punj and D. W. Stewart, “Cluster Analysis in Marketing Research: Review and Suggestions for Application,” *Journal of Marketing Research*, vol. 20, no. 2, pp. 134–148, 1983. doi: 10.1177/002224378302000204.
+                1. J. MacQueen, “Some Methods for Classification and Analysis of Multivariate Observations,” *Proceedings of the Fifth Berkeley Symposium on Mathematical Statistics and Probability*, vol. 1, pp. 281–297, 1967.
+                2. L. Kaufman and P. J. Rousseeuw, *Finding Groups in Data: An Introduction to Cluster Analysis*. New York: Wiley, 1990, doi: 10.1002/9780470316801.
+                3. G. Punj and D. W. Stewart, “Cluster Analysis in Marketing Research: Review and Suggestions for Application,” *Journal of Marketing Research*, vol. 20, no. 2, pp. 134–148, 1983, doi: 10.1177/002224378302000204.
                 """
             )
-
-        heatmap_data = centroid_z.set_index("Cluster")[FEATURE_COLUMNS]
-        fig_heat = go.Figure(
-            data=go.Heatmap(
-                z=heatmap_data.values,
-                x=[DISPLAY_NAMES[c] for c in FEATURE_COLUMNS],
-                y=[f"Cluster {int(i)}" for i in heatmap_data.index],
-                colorscale="RdYlGn",
-                zmid=0,
-                colorbar_title="Z-score",
-                text=np.round(heatmap_data.values, 2),
-                texttemplate="%{text}",
-            )
-        )
-        fig_heat.update_layout(
-            title="Dasar Interpretasi: Posisi Centroid terhadap Rata-rata Seluruh Responden",
-            xaxis_title="Variabel utama",
-            yaxis_title="Cluster",
-        )
-        st.plotly_chart(fig_heat, use_container_width=True)
 
         for _, row in profile_df.iterrows():
             st.markdown(
